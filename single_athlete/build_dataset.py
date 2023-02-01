@@ -1,14 +1,16 @@
-import pandas as pd
+import os
+import datetime
 import requests
-import numpy as np
 import math
 import json
-import datetime
+
+import pandas as pd
+import numpy as np
+from sklearn.linear_model import LinearRegression
 
 import sys
 sys.path.append('../../CheetahPy')
 from cheetahpy import CheetahPy
-from sklearn.linear_model import LinearRegression
 
 
 class dataset(object):
@@ -20,8 +22,8 @@ class dataset(object):
     
     def build_gc_request(self):
         base_api_endpoint = 'http://localhost:12021/Ryan%20Duecker?metrics={metrics_fields}&metadata={metadata_fields}'
-        fmted_endpoint = base_api_endpoint.format(metrics_fields=self.metrics_list
-                                                ,metadata_fields=self.metadata_list)
+        fmted_endpoint = base_api_endpoint.format(metrics_fields=','.join(self.metrics_list)
+                                                ,metadata_fields=','.join(self.metadata_list))
         return fmted_endpoint
     
     def build_new_dataset(self):
@@ -46,9 +48,6 @@ class dataset(object):
         self.activity_filenames = data_original[data_original['Average_Power']>0]['filename'].tolist()
     
     def calculate_activity_ef_params(self):
-        ## Load gc api module to access individual activities 
-        cp = CheetahPy()
-        
         ## model ef
         files_modeled = self.process_filenames()
         df = pd.DataFrame(files_modeled['modeled']
@@ -57,12 +56,14 @@ class dataset(object):
 
         self.save_dataframe(df, name='modeled_ef')
 
-    def save_dataframe(df, name, dir='./', index_save_status=False):
-        save_path = os.path.join([dir,f'{name}.csv'])
+    def save_dataframe(self, df, name, dir='./', index_save_status=False):
+        save_path = os.path.join(dir,f'{name}.csv')
         df.to_csv(save_path, index=index_save_status)
-        print('{name} saved')
+        print(f'{name} saved')
 
     def extract_activity_data(self, fn):
+        ## Load gc api module to access individual activities 
+        cp = CheetahPy()
         ac = cp.get_activity(athlete="Ryan Duecker"
                             ,activity_filename=fn)
         var_Ti = np.where(ac['temp'].mean() < -20, 20, ac['temp'].mean())
@@ -95,3 +96,13 @@ class dataset(object):
             a,b,c, rmse = self.make_coef(X,y)
             details['modeled'].append([a,b,c, rmse])
         return details
+
+
+
+if __name__ == "__main__":
+    dataset_loader = dataset()
+    print("Building new activity dataset")
+    dataset_loader.build_new_dataset()
+    print("Building new ef coef dataset")
+    dataset_loader.calculate_activity_ef_params()
+    print('Done!')
