@@ -154,12 +154,12 @@ class performance_functions(object):
     def __init__(self):
         self.name = 'perf fxns'
         self.metric_function_map = {
-            'VO2':              self.calc_vo2,
-            'Garmin VO2':       self.use_garmin_vo2,
-            'AE EF':            self.calc_ae_ef,
-            'Power Index':      self.use_power_index,
-            'Power Index EF':   self.use_power_index_ef,
-            'Mod AE Power':     self.modeled_aerobic_threshold_power
+            'VO2':              calc_vo2,
+            'Garmin VO2':       use_garmin_vo2,
+            'AE EF':            calc_ae_ef,
+            'Power Index':      use_power_index,
+            'Power Index EF':   use_power_index_ef,
+            'Mod AE Power':     modeled_aerobic_threshold_power
         }
     
     def derive_performance(self, activity_row, performance_metric):
