@@ -112,43 +112,66 @@ class dataset_preprocess(object):
         self.local_activity_store = local_activity_store
         self.local_activity_model_params = local_activity_model_params
 
-    
+        if local_activity_store != None:
+            self.activity_data = self.load_dataset(local_activity_store)
+        if local_activity_model_params != None:
+            self.modeled_data = self.load_dataset(local_activity_model_params)
+
+    def load_dataset(self, filepath):
+        data = pd.read_csv(filepath)
+        return data
+
     def power_index_maker(self, power, duration, cp=340, w_prime=15000, pmax=448):
         theoretical_power = w_prime/duration - w_prime/(cp-pmax) + cp
         power_index = (power/theoretical_power)*100
         return power_index
+    def _calc_xpace(frame):
+
+    @staticmethod
+    def _filter_absent_data(frame):
+        frame['xPace'] = np.where(frame['xPace'] <= 0
+                                ,frame['Pace']
+                                ,frame['xPace'])
+        frame = frame[~(((frame['Sport'] == 'Run') 
+                            & (frame['Pace'] <= 0))
+                        | ((frame['Sport'] == 'Bike') & (data_df['Average_Power'] <= 0))
+                        | (frame['Average_Heart_Rate'] <= 0))].copy()
+        return frame
+
 
     def pre_process(self, performance_fxn, performance_lower_bound=0, sport=False):
-        data_df['xPace'] = np.where(data_df['xPace'] <= 0, data_df['Pace'], data_df['xPace'])
-        data_df = data_df[~(((data_df['Sport'] == 'Run') & (data_df['Pace'] <= 0))
-                | ((data_df['Sport'] == 'Bike') & (data_df['Average_Power'] <= 0))
-                | (data_df['Average_Heart_Rate'] <= 0))].copy()
-        data_df.rename(columns={'date':'workoutDate'}, inplace=True)
-        data_df['day_TSS'] = data_df['TSS'].groupby(data_df['workoutDate']).transform('sum').fillna(0)
-        data_df['performance_metric'] = data_df.apply(lambda row: performance_fxn(row, athlete_statics), axis=1)
-        # data_df['performance_metric'] = np.where(data_df['Duration'] < 60*60, 0, data_df['performance_metric'])
-        data_df['performance_metric'] = np.where(data_df['performance_metric'] < performance_lower_bound, 0, data_df['performance_metric'])
         
-        # data_df = data_df[['workoutDate','day_TSS','performance_metric','Sport']]
+        self.activity_data = self._filter_absent_data(self.activity_data)
 
-        data_df['performance_metric'] = data_df['performance_metric'].replace(0,np.nan)
-        data_df['performance_metric'] = data_df['performance_metric'].fillna(method='ffill')
+        ### This monolith needs to be broken up
+        self.activity_data.rename(columns={'date':'workoutDate'}, inplace=True)
+        self.activity_data['day_TSS'] = self.activity_data['TSS'].groupby(self.activity_data['workoutDate']).transform('sum').fillna(0)
+
+        self.activity_data['performance_metric'] = self.activity_data.apply(lambda row: performance_fxn(row, athlete_statics), axis=1)
+        # self.activity_data['performance_metric'] = np.where(self.activity_data['Duration'] < 60*60, 0, self.activity_data['performance_metric'])
+        self.activity_data['performance_metric'] = np.where(self.activity_data['performance_metric'] < performance_lower_bound, 0, self.activity_data['performance_metric'])
+        
+        # self.activity_data = self.activity_data[['workoutDate','day_TSS','performance_metric','Sport']]
+
+        self.activity_data['performance_metric'] = self.activity_data['performance_metric'].replace(0,np.nan)
+        self.activity_data['performance_metric'] = self.activity_data['performance_metric'].fillna(method='ffill')
         agg_dict = {'day_TSS':'mean','performance_metric':'max'}
+        
         if sport:
             agg_dict.update({'Sport':'first'})
-            data_df = data_df.sort_values('Sport')
-        data_df = data_df.groupby('workoutDate').agg(agg_dict)
+            self.activity_data = self.activity_data.sort_values('Sport')
+        self.activity_data = self.activity_data.groupby('workoutDate').agg(agg_dict)
         
-        data_df['date'] = data_df.index
-        data_df['date'] = pd.to_datetime(data_df['date'])
-        data_df = data_df.sort_values(by=['date'])
-        data_df.index = pd.DatetimeIndex(data_df['date'])
-        missing_dates = pd.date_range(start=data_df.index.min(), end=data_df.index.max())
-        data_df = data_df.reindex(missing_dates, fill_value=0)
-        data_df['performance_metric'] = data_df['performance_metric'].replace(0,np.nan)
-        data_df['performance_metric'] = data_df['performance_metric'].fillna(method='ffill')
-        data_df = data_df.dropna()
-        return data_df
+        self.activity_data['date'] = self.activity_data.index
+        self.activity_data['date'] = pd.to_datetime(self.activity_data['date'])
+        self.activity_data = self.activity_data.sort_values(by=['date'])
+        self.activity_data.index = pd.DatetimeIndex(self.activity_data['date'])
+        missing_dates = pd.date_range(start=self.activity_data.index.min(), end=self.activity_data.index.max())
+        self.activity_data = self.activity_data.reindex(missing_dates, fill_value=0)
+        self.activity_data['performance_metric'] = self.activity_data['performance_metric'].replace(0,np.nan)
+        self.activity_data['performance_metric'] = self.activity_data['performance_metric'].fillna(method='ffill')
+        self.activity_data = self.activity_data.dropna()
+        return "pre-process successful"
 
 class performance_functions(object):
     def __init__(self):
