@@ -13,6 +13,15 @@ sys.path.append('../../CheetahPy')
 from cheetahpy import CheetahPy
 
 
+ryan_static_metrics = {"max_hr": 191
+                      ,"resting_hr": 40
+                      ,'ae_threshold_hr': 148
+                      ,'LTthreshold_hr': 168
+                      ,'run_settings':{'cp': 356
+                                      ,'w_prime': 16900
+                                      ,'pmax': 642}}
+
+
 class dataset(object):
     def __init__(self):
         self.metrics_list = ['Duration','TSS','StrydStress','Average_Heart_Rate','Max_Heartrate','Average_Power','Athlete_Weight'
@@ -96,6 +105,15 @@ class dataset(object):
             a,b,c, rmse = self.make_coef(X,y)
             details['modeled'].append([a,b,c, rmse])
         return details
+
+class dataset_preprocess(object):
+    def __init__(self, athlete_statics):
+        self.
+
+    def power_index_maker(self, power, duration, cp=340, w_prime=15000, pmax=448):
+        theoretical_power = w_prime/duration - w_prime/(cp-pmax) + cp
+        power_index = (power/theoretical_power)*100
+        return power_index
 
 
 
