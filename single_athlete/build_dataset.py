@@ -138,14 +138,19 @@ class dataset_preprocess(object):
                         | (frame['Average_Heart_Rate'] <= 0))].copy()
         return frame
 
+    @staticmethod
+    def _(frame):
+        frame.rename(columns={'date':'workoutDate'}, inplace=True)
+        frame['day_TSS'] = frame['TSS'].groupby(frame['workoutDate']).transform('sum').fillna(0)
+        return frame
 
-    def pre_process(self, performance_fxn, performance_lower_bound=0, sport=False):
+
+    def pre_process(self, load_fxn, performance_fxn, performance_lower_bound=0, sport=False):
         
         self.activity_data = self._filter_absent_data(self.activity_data)
 
         ### This monolith needs to be broken up
-        self.activity_data.rename(columns={'date':'workoutDate'}, inplace=True)
-        self.activity_data['day_TSS'] = self.activity_data['TSS'].groupby(self.activity_data['workoutDate']).transform('sum').fillna(0)
+        self.activity_data = self._filter_absent_data(self.activity_data)
 
         self.activity_data['performance_metric'] = self.activity_data.apply(lambda row: performance_fxn(row, athlete_statics), axis=1)
         # self.activity_data['performance_metric'] = np.where(self.activity_data['Duration'] < 60*60, 0, self.activity_data['performance_metric'])
@@ -172,6 +177,23 @@ class dataset_preprocess(object):
         self.activity_data['performance_metric'] = self.activity_data['performance_metric'].fillna(method='ffill')
         self.activity_data = self.activity_data.dropna()
         return "pre-process successful"
+
+class load_functions(object):
+    def __init__(self):
+        self.name = 'load fxns'
+        self.metric_function_map = {
+            'TSS':              self.,
+            'Garmin VO2':       self.use_garmin_vo2,
+            'AE EF':            self.calc_ae_ef,
+            'Power Index':      self.use_power_index,
+            'Power Index EF':   self.use_power_index_ef,
+            'Mod AE Power':     self.modeled_aerobic_threshold_power
+        }
+    
+    def derive_performance(self, activity_row, performance_metric):
+        performance_function = self.metric_function_map[performance_metric]
+        val = performance_function(activity_row)
+        return val
 
 class performance_functions(object):
     def __init__(self):
