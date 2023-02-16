@@ -23,7 +23,7 @@ ryan_static_metrics = {"max_hr": 191
 
 
 class dataset(object):
-    def __init__(self):
+    def __init__(self, ):
         self.metrics_list = ['Duration','TSS','StrydStress','Average_Heart_Rate','Max_Heartrate','Average_Power','Athlete_Weight'
                             ,'Estimated_VO2MAX','10_sec_Peak_Pace_Swim','xPace','Pace','IsoPower','Power_Index','L1_Time_in_Zone'
                             ,'L2_Time_in_Zone','L3_Time_in_Zone','L4_Time_in_Zone','L5_Time_in_Zone','L6_Time_in_Zone','L7_Time_in_Zone']
@@ -125,79 +125,107 @@ class dataset_preprocess(object):
         theoretical_power = w_prime/duration - w_prime/(cp-pmax) + cp
         power_index = (power/theoretical_power)*100
         return power_index
-    def _calc_xpace(frame):
 
-    @staticmethod
-    def _filter_absent_data(frame):
-        frame['xPace'] = np.where(frame['xPace'] <= 0
-                                ,frame['Pace']
-                                ,frame['xPace'])
-        frame = frame[~(((frame['Sport'] == 'Run') 
-                            & (frame['Pace'] <= 0))
-                        | ((frame['Sport'] == 'Bike') & (data_df['Average_Power'] <= 0))
-                        | (frame['Average_Heart_Rate'] <= 0))].copy()
-        return frame
-
-    @staticmethod
-    def _(frame):
-        frame.rename(columns={'date':'workoutDate'}, inplace=True)
-        frame['day_TSS'] = frame['TSS'].groupby(frame['workoutDate']).transform('sum').fillna(0)
-        return frame
-
-
-    def pre_process(self, load_fxn, performance_fxn, performance_lower_bound=0, sport=False):
+    # def _calc_xpace(frame):
+    #     frame['xPace'] = np.where(frame['xPace'] <= 0
+    #                             ,frame['Pace']
+    #                             ,frame['xPace'])
         
-        self.activity_data = self._filter_absent_data(self.activity_data)
+    def _filter_absent_data(self):
+        self.activity_data = self.activity_data[~(((self.activity_data['Sport'] == 'Run') 
+                                                    & (self.activity_data['Pace'] <= 0))
+                                                | ((self.activity_data['Sport'] == 'Bike') & (self.activity_data['Average_Power'] <= 0))
+                                                | (self.activity_data['Average_Heart_Rate'] <= 0))].copy()
+        return 0
 
-        ### This monolith needs to be broken up
-        self.activity_data = self._filter_absent_data(self.activity_data)
-
-        self.activity_data['performance_metric'] = self.activity_data.apply(lambda row: performance_fxn(row, athlete_statics), axis=1)
+    def _reframe_data_tss(self):
+        self.activity_data.rename(columns={'date':'workoutDate'}, inplace=True)
+        ## transform doesn't compress the frame and instead matches index to index
+        self.activity_data['day_TSS'] = self.activity_data['TSS'].groupby(self.activity_data['workoutDate']).transform('sum').fillna(0)
+        return 0
+    
+    def _prune_relative_to_performance_metric(self, performance_lower_bound):
         # self.activity_data['performance_metric'] = np.where(self.activity_data['Duration'] < 60*60, 0, self.activity_data['performance_metric'])
         self.activity_data['performance_metric'] = np.where(self.activity_data['performance_metric'] < performance_lower_bound, 0, self.activity_data['performance_metric'])
-        
-        # self.activity_data = self.activity_data[['workoutDate','day_TSS','performance_metric','Sport']]
-
         self.activity_data['performance_metric'] = self.activity_data['performance_metric'].replace(0,np.nan)
         self.activity_data['performance_metric'] = self.activity_data['performance_metric'].fillna(method='ffill')
-        agg_dict = {'day_TSS':'mean','performance_metric':'max'}
-        
-        if sport:
-            agg_dict.update({'Sport':'first'})
-            self.activity_data = self.activity_data.sort_values('Sport')
-        self.activity_data = self.activity_data.groupby('workoutDate').agg(agg_dict)
-        
+        return 0
+    
+    def _impute_dates(self, fill_performance_forward):
         self.activity_data['date'] = self.activity_data.index
         self.activity_data['date'] = pd.to_datetime(self.activity_data['date'])
         self.activity_data = self.activity_data.sort_values(by=['date'])
         self.activity_data.index = pd.DatetimeIndex(self.activity_data['date'])
         missing_dates = pd.date_range(start=self.activity_data.index.min(), end=self.activity_data.index.max())
         self.activity_data = self.activity_data.reindex(missing_dates, fill_value=0)
-        self.activity_data['performance_metric'] = self.activity_data['performance_metric'].replace(0,np.nan)
-        self.activity_data['performance_metric'] = self.activity_data['performance_metric'].fillna(method='ffill')
-        self.activity_data = self.activity_data.dropna()
+
+        # Fill missing performance data
+        if fill_performance_forward:
+            self.activity_data['performance_metric'] = self.activity_data['performance_metric'].replace(0,np.nan)
+            self.activity_data['performance_metric'] = self.activity_data['performance_metric'].fillna(method='ffill')
+            self.activity_data = self.activity_data.dropna()
+        return 0
+
+
+    def pre_process(self, load_fxn, performance_fxn, performance_lower_bound=0, sport=False, fill_performance_forward=True):
+        self._filter_absent_data()
+
+        ## Use identified fxn to create performace metric for activity row
+        self.activity_data['performance_metric'] = self.activity_data.apply(lambda row: performance_fxn(row, self.athlete_statics), axis=1)
+
+        ## prune frame based of performance metric
+        self._prune_relative_to_performance_metric(performance_lower_bound=performance_lower_bound)
+
+        ## Aggregate frame to daily (+ sport data)
+        agg_dict = {'day_TSS':'mean','performance_metric':'max'}
+        groupby_list = ['workoutDate']
+        if sport:
+            groupby_list.append('Sport')
+        self.activity_data = self.activity_data.groupby(groupby_list).agg(agg_dict)
+        
+        # Impute missing dates to create daily values + handle performance data
+        self._impute_dates(fill_performance_forward=fill_performance_forward)
+
         return "pre-process successful"
 
-class load_functions(object):
+class load_functions(dataset_preprocess):
+# class load_functions(object):
     def __init__(self):
-        self.name = 'load fxns'
+        super().__init__()
         self.metric_function_map = {
-            'TSS':              self.,
-            'Garmin VO2':       self.use_garmin_vo2,
-            'AE EF':            self.calc_ae_ef,
-            'Power Index':      self.use_power_index,
-            'Power Index EF':   self.use_power_index_ef,
-            'Mod AE Power':     self.modeled_aerobic_threshold_power
+            'Daily_TSS':        self.daily_tss,
+            'TIZ2_5':           self.tiz2of5,
+            'TIZ1_3':           self.tiz1of3,
+            'TIZ3_3':           self.tiz3of3
         }
     
-    def derive_performance(self, activity_row, performance_metric):
-        performance_function = self.metric_function_map[performance_metric]
-        val = performance_function(activity_row)
-        return val
+    def derive_load(self, frame: pd.DataFrame, load_metric: str) -> pd.DataFrame:
+        performance_function = self.metric_function_map[load_metric]
+        frame[load_metric] = performance_function(frame)
+        return frame
 
+    def daily_tss(self, frame):
+        values = frame['TSS'].groupby(frame['date']).transform('sum').fillna(0)
+        return values
+
+    def tiz2of5(self, frame):
+        values = frame['L2_Time_in_Zone'].groupby(frame['date']).transform('sum').fillna(0).sum(axis=1)
+        return values
+    
+    def tiz1of3(self, frame):
+        values = frame[['L1_Time_in_Zone','L2_Time_in_Zone']].groupby(frame['date']).transform('sum').fillna(0).sum(axis=1)
+        return values
+    
+    def tiz3of3(self, frame):
+        values = frame[['L4_Time_in_Zone','L5_Time_in_Zone'
+                        ,'L6_Time_in_Zone','L7_Time_in_Zone']].groupby(frame['date']).transform('sum').fillna(0).sum(axis=1)
+        return values
+
+# class performance_functions(dataset_preprocess):
 class performance_functions(object):
-    def __init__(self):
-        self.name = 'perf fxns'
+    def __init__(self, athlete_statics=ryan_static_metrics):
+        # super().__init__()
+        self.athlete_statics=athlete_statics
         self.metric_function_map = {
             'VO2':              self.calc_vo2,
             'Garmin VO2':       self.use_garmin_vo2,
@@ -207,21 +235,38 @@ class performance_functions(object):
             'Mod AE Power':     self.modeled_aerobic_threshold_power
         }
     
-    def derive_performance(self, activity_row, performance_metric):
-        performance_function = self.metric_function_map[performance_metric]
-        val = performance_function(activity_row)
-        return val
+    # def derive_performance(self, activity_row, performance_metric: str) -> float:
+    #     performance_function = self.metric_function_map[performance_metric]
+    #     val = performance_function(activity_row)
+    #     return val
 
-    def calc_vo2(self, row):
-        if row['Sport'] == 'Bike':
-            percent_vo2 = (row['Average_Heart_Rate'] - athlete_statics["resting_hr"])/(athlete_statics["max_hr"] - athlete_statics["resting_hr"])
-            vo2_estimated = (((row['Average_Power']/75)*1000)/row['Athlete_Weight']) / percent_vo2
-        elif row['Sport'] == 'Run':
-            percent_vo2 = (row['Average_Heart_Rate'] - athlete_statics["resting_hr"])/(athlete_statics["max_hr"] - athlete_statics["resting_hr"])
-            vo2_estimated = (210/row['xPace']) / percent_vo2
-        else:
-            vo2_estimated =  0
-        return vo2_estimated
+    def derive_performance(self, frame: pd.DataFrame, performance_metric: str) -> pd.DataFrame:
+        performance_function = self.metric_function_map[performance_metric]
+        frame[performance_metric] = performance_function(frame)
+        return frame
+
+    # def calc_vo2(self, row):
+    #     if row['Sport'] == 'Bike':
+    #         percent_vo2 = (row['Average_Heart_Rate'] - athlete_statics["resting_hr"])/(athlete_statics["max_hr"] - athlete_statics["resting_hr"])
+    #         vo2_estimated = (((row['Average_Power']/75)*1000)/row['Athlete_Weight']) / percent_vo2
+    #     elif row['Sport'] == 'Run':
+    #         percent_vo2 = (row['Average_Heart_Rate'] - athlete_statics["resting_hr"])/(athlete_statics["max_hr"] - athlete_statics["resting_hr"])
+    #         vo2_estimated = (210/row['xPace']) / percent_vo2
+    #     else:
+    #         vo2_estimated =  0
+    #     return vo2_estimated
+    def calc_vo2(self, frame):
+        percent_vo2 = (frame['Average_Heart_Rate'] - self.athlete_statics["resting_hr"])/(self.athlete_statics["max_hr"] - self.athlete_statics["resting_hr"])
+        bike_vo2_estimated = (((frame['Average_Power']/75)*1000)/frame['Athlete_Weight']) / percent_vo2
+        run_vo2_estimated = (210/frame['xPace']) / percent_vo2
+
+        vo2_dict = {'Bike':bike_vo2_estimated
+                   ,'Run': run_vo2_estimated}
+        for i,sport in frame['Sport'].unique():
+            vo2_dict.update({sport:0}) if sport not in vo2_dict.keys() else 0
+
+        values = frame['Sport'].apply(lambda sport: vo2_dict[sport])
+        return values
 
     def use_garmin_vo2(self, row):
         vo2_estimated = 0
@@ -275,3 +320,10 @@ if __name__ == "__main__":
     print("Building new ef coef dataset")
     dataset_loader.calculate_activity_ef_params()
     print('Done!')
+else:
+    try:
+        os.path.getsize('gc_activitydata_local.csv')
+        print('Local dataset available. process using `dataset_preprocess`')
+    except:
+        dataset_loader = dataset()
+        print('No local dataset available. build using `dataset_loader`')
