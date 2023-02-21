@@ -196,6 +196,7 @@ class load_functions(dataset_preprocess):
             'Daily_TSS':        self.daily_tss,
             'TIZ2_5':           self.tiz2of5,
             'TIZ1_3':           self.tiz1of3,
+            'TIZ2_3':           self.tiz2of3,
             'TIZ3_3':           self.tiz3of3
         }
     
@@ -214,6 +215,10 @@ class load_functions(dataset_preprocess):
     
     def tiz1of3(self, frame):
         values = frame[['L1_Time_in_Zone','L2_Time_in_Zone']].groupby(frame['date']).transform('sum').fillna(0).sum(axis=1)
+        return values
+    
+    def tiz2of3(self, frame):
+        values = frame[['L3_Time_in_Zone']].groupby(frame['date']).transform('sum').fillna(0)
         return values
     
     def tiz3of3(self, frame):
@@ -235,38 +240,44 @@ class performance_functions(object):
             'Mod AE Power':     self.modeled_aerobic_threshold_power
         }
     
-    # def derive_performance(self, activity_row, performance_metric: str) -> float:
-    #     performance_function = self.metric_function_map[performance_metric]
-    #     val = performance_function(activity_row)
-    #     return val
-
-    def derive_performance(self, frame: pd.DataFrame, performance_metric: str) -> pd.DataFrame:
+    def derive_performance(self, frame, performance_metric: str) -> float:
         performance_function = self.metric_function_map[performance_metric]
-        frame[performance_metric] = performance_function(frame)
+        values = []
+        for index, row in frame.iterrows():
+            values.append(performance_function(row))
+        frame[performance_metric] = values
         return frame
 
-    # def calc_vo2(self, row):
-    #     if row['Sport'] == 'Bike':
-    #         percent_vo2 = (row['Average_Heart_Rate'] - athlete_statics["resting_hr"])/(athlete_statics["max_hr"] - athlete_statics["resting_hr"])
-    #         vo2_estimated = (((row['Average_Power']/75)*1000)/row['Athlete_Weight']) / percent_vo2
-    #     elif row['Sport'] == 'Run':
-    #         percent_vo2 = (row['Average_Heart_Rate'] - athlete_statics["resting_hr"])/(athlete_statics["max_hr"] - athlete_statics["resting_hr"])
-    #         vo2_estimated = (210/row['xPace']) / percent_vo2
-    #     else:
-    #         vo2_estimated =  0
-    #     return vo2_estimated
-    def calc_vo2(self, frame):
-        percent_vo2 = (frame['Average_Heart_Rate'] - self.athlete_statics["resting_hr"])/(self.athlete_statics["max_hr"] - self.athlete_statics["resting_hr"])
-        bike_vo2_estimated = (((frame['Average_Power']/75)*1000)/frame['Athlete_Weight']) / percent_vo2
-        run_vo2_estimated = (210/frame['xPace']) / percent_vo2
+## TODO: REBUILD TO VECTOR MATH
+    # def derive_performance(self, frame: pd.DataFrame, performance_metric: str) -> pd.DataFrame:
+    #     performance_function = self.metric_function_map[performance_metric]
+    #     frame[performance_metric] = performance_function(frame)
+    #     return frame
 
-        vo2_dict = {'Bike':bike_vo2_estimated
-                   ,'Run': run_vo2_estimated}
-        for i,sport in frame['Sport'].unique():
-            vo2_dict.update({sport:0}) if sport not in vo2_dict.keys() else 0
+    def calc_vo2(self, row):
+        if row['Sport'] == 'Bike':
+            percent_vo2 = (row['Average_Heart_Rate'] - self.athlete_statics["resting_hr"])/(self.athlete_statics["max_hr"] - self.athlete_statics["resting_hr"])
+            vo2_estimated = (((row['Average_Power']/75)*1000)/row['Athlete_Weight']) / percent_vo2
+        elif row['Sport'] == 'Run':
+            percent_vo2 = (row['Average_Heart_Rate'] - self.athlete_statics["resting_hr"])/(self.athlete_statics["max_hr"] - self.athlete_statics["resting_hr"])
+            vo2_estimated = (210/row['xPace']) / percent_vo2
+        else:
+            vo2_estimated =  0
+        return vo2_estimated
 
-        values = frame['Sport'].apply(lambda sport: vo2_dict[sport])
-        return values
+    ## TODO: REBUILD TO VECTOR MATH
+    # def calc_vo2(self, frame):
+    #     percent_vo2 = (frame['Average_Heart_Rate'] - self.athlete_statics["resting_hr"])/(self.athlete_statics["max_hr"] - self.athlete_statics["resting_hr"])
+    #     bike_vo2_estimated = (((frame['Average_Power']/75)*1000)/frame['Athlete_Weight']) / percent_vo2
+    #     run_vo2_estimated = (210/frame['xPace']) / percent_vo2
+
+    #     vo2_dict = {'Bike':bike_vo2_estimated
+    #                ,'Run': run_vo2_estimated}
+    #     for i,sport in frame['Sport'].unique():
+    #         vo2_dict.update({sport:0}) if sport not in vo2_dict.keys() else 0
+
+    #     values = frame['Sport'].apply(lambda sport: vo2_dict[sport])
+    #     return values
 
     def use_garmin_vo2(self, row):
         vo2_estimated = 0
@@ -292,8 +303,8 @@ class performance_functions(object):
 
     def use_power_index_ef(self, row):
         if row['Average_Power'] > 0:
-            hr_range = athlete_statics['max_hr'] - athlete_statics['resting_hr']
-            avg_hr_rel = row['Average_Heart_Rate'] - athlete_statics['resting_hr']
+            hr_range = self.athlete_statics['max_hr'] - self.athlete_statics['resting_hr']
+            avg_hr_rel = row['Average_Heart_Rate'] - self.athlete_statics['resting_hr']
             relative_hr = (avg_hr_rel / hr_range)*100
             
             pi_ef = row['Power_Index']/relative_hr
@@ -307,7 +318,7 @@ class performance_functions(object):
         duration = 60*60
         
         if (row['a'] != 0) & (row['Duration'] > 999):
-            power = row['a'] + row['b']*athlete_statics['threshold_hr'] +  row['c']*duration*temp
+            power = row['a'] + row['b'] * self.athlete_statics['threshold_hr'] +  row['c'] * duration * temp
             return power
         else:
             return 0
