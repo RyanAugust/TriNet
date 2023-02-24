@@ -51,7 +51,7 @@ class dataset(object):
         data_original['date'] = pd.to_datetime(data_original['date'])
         data_original['VO2max_detected'] = data_original['VO2max_detected'].astype(float)
         
-        self.save_dataframe(data_original, name='gc_activitydata_ryan')
+        self.save_dataframe(data_original, name='gc_activitydata_local')
 
         ## Set list of activities from earlier filtered call
         self.activity_filenames = data_original[data_original['Average_Power']>0]['filename'].tolist()
