@@ -56,12 +56,24 @@ class dataset(object):
         ## Set list of activities from earlier filtered call
         self.activity_filenames = data_original[data_original['Average_Power']>0]['filename'].tolist()
     
-    def calculate_activity_ef_params(self):
-        ## model ef
-        files_modeled = self.process_filenames()
+    def calculate_activity_ef_params(self, update=False):
+        all_filenames = self.activity_filenames
+        if update:
+            try:
+                old_file = pd.read_csv('modeled_ef.csv')
+                for file in old_file['files']:
+                    all_filenames.remove(file)
+                files_modeled = self.process_filenames(file_list=all_filenames)
+            except:
+                update = False
+                print("--couldn't load previous modeled_ef dataset")
+                ## model ef
+                files_modeled = self.process_filenames()
         df = pd.DataFrame(files_modeled['modeled']
                          ,files_modeled['files']).reset_index()
         df.columns = ['files','a','b','c','rmse']
+        if update:
+            df = pd.concat([old_file,df])
 
         self.save_dataframe(df, name='modeled_ef')
 
@@ -94,11 +106,14 @@ class dataset(object):
         rmse = np.sqrt(((y - reg.predict(X))**2).mean())
         return a,b,c, rmse
 
-    def process_filenames(self):
-        details = {'files':self.activity_filenames
+    def process_filenames(self, file_list=[]):
+        if file_list == []:
+            file_list = self.activity_filenames
+
+        details = {'files':file_list
                     ,'modeled':[]}
-        total_fns = len(self.activity_filenames)
-        for i, fn in enumerate(self.activity_filenames):
+        total_fns = len(file_list)
+        for i, fn in enumerate(file_list):
             if i % 25 == 0:
                 print("{}/{} activities modeled".format(i,total_fns))
             X, y = self.extract_activity_data(fn)
