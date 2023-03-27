@@ -13,7 +13,7 @@ sys.path.append('../../CheetahPy')
 from cheetahpy import CheetahPy
 
 
-ryan_static_metrics = {"max_hr": 191
+static_metrics = {"max_hr": 191
                       ,"resting_hr": 40
                       ,'ae_threshold_hr': 148
                       ,'LTthreshold_hr': 168
@@ -122,7 +122,7 @@ class dataset(object):
         return details
 
 class dataset_preprocess(object):
-    def __init__(self, local_activity_store=None, local_activity_model_params=None, athlete_statics=ryan_static_metrics):
+    def __init__(self, local_activity_store=None, local_activity_model_params=None, athlete_statics=static_metrics):
         self.athlete_statics = athlete_statics
         self.local_activity_store = local_activity_store
         self.local_activity_model_params = local_activity_model_params
@@ -212,7 +212,8 @@ class load_functions(dataset_preprocess):
             'TIZ2_5':           self.tiz2of5,
             'TIZ1_3':           self.tiz1of3,
             'TIZ2_3':           self.tiz2of3,
-            'TIZ3_3':           self.tiz3of3
+            'TIZ3_3':           self.tiz3of3,
+            'Daily RPE':        self.daily_rpe
         }
     
     def derive_load(self, frame: pd.DataFrame, load_metric: str) -> pd.DataFrame:
@@ -243,7 +244,7 @@ class load_functions(dataset_preprocess):
 
 # class performance_functions(dataset_preprocess):
 class performance_functions(object):
-    def __init__(self, athlete_statics=ryan_static_metrics):
+    def __init__(self, athlete_statics=static_metrics):
         # super().__init__()
         self.athlete_statics=athlete_statics
         self.metric_function_map = {
@@ -269,7 +270,7 @@ class performance_functions(object):
     #     frame[performance_metric] = performance_function(frame)
     #     return frame
 
-    def calc_vo2(self, row):
+    def calc_vo2(self, row: pd.Series) -> float:
         if row['Sport'] == 'Bike':
             percent_vo2 = (row['Average_Heart_Rate'] - self.athlete_statics["resting_hr"])/(self.athlete_statics["max_hr"] - self.athlete_statics["resting_hr"])
             vo2_estimated = (((row['Average_Power']/75)*1000)/row['Athlete_Weight']) / percent_vo2
@@ -277,7 +278,7 @@ class performance_functions(object):
             percent_vo2 = (row['Average_Heart_Rate'] - self.athlete_statics["resting_hr"])/(self.athlete_statics["max_hr"] - self.athlete_statics["resting_hr"])
             vo2_estimated = (210/row['xPace']) / percent_vo2
         else:
-            vo2_estimated =  0
+            vo2_estimated =  0.0
         return vo2_estimated
 
     ## TODO: REBUILD TO VECTOR MATH
@@ -294,13 +295,13 @@ class performance_functions(object):
     #     values = frame['Sport'].apply(lambda sport: vo2_dict[sport])
     #     return values
 
-    def use_garmin_vo2(self, row):
-        vo2_estimated = 0
+    def use_garmin_vo2(self, row: pd.Series) -> float:
+        vo2_estimated = 0.0
         if (row['Workout_Code'] != 'Rec') & (row['Sport'] in ['Run','Bike']):
             vo2_estimated = row['VO2max_detected'] # Garmin VO2 Estimation
         return vo2_estimated
 
-    def calc_ae_ef(self, row):
+    def calc_ae_ef(self, row: pd.Series) -> float:
         ef = 0
         if (row['Workout_Code'] == 'AE'):
             if row['Sport'] == 'Bike':
@@ -308,12 +309,12 @@ class performance_functions(object):
             elif row['Sport'] == 'Run':
                 ef = row['IsoPower']/row['Average_Heart_Rate']
         return ef
-
-    def use_power_index(self, row):
+    
+    def use_power_index(self, row: pd.Series) -> float:
         if row['Average_Power'] > 0:
             val = row['Power_Index']
         else:
-            val = 0
+            val = 0.0
         return val
 
     def use_power_index_ef(self, row):
