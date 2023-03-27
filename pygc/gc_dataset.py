@@ -23,7 +23,7 @@ static_metrics = {"max_hr": 191
 
 
 class dataset(object):
-    def __init__(self, ):
+    def __init__(self):
         self.metrics_list = ['Duration','TSS','StrydStress','Average_Heart_Rate','Max_Heartrate','Average_Power','Athlete_Weight'
                             ,'Estimated_VO2MAX','10_sec_Peak_Pace_Swim','xPace','Pace','IsoPower','Power_Index','L1_Time_in_Zone'
                             ,'L2_Time_in_Zone','L3_Time_in_Zone','L4_Time_in_Zone','L5_Time_in_Zone','L6_Time_in_Zone','L7_Time_in_Zone']
@@ -56,7 +56,7 @@ class dataset(object):
         ## Set list of activities from earlier filtered call
         self.activity_filenames = data_original[data_original['Average_Power']>0]['filename'].tolist()
     
-    def calculate_activity_ef_params(self, update=False):
+    def calculate_activity_ef_params(self, update:bool =False):
         all_filenames = self.activity_filenames
         if update:
             try:
@@ -77,16 +77,16 @@ class dataset(object):
 
         self.save_dataframe(df, name='modeled_ef')
 
-    def save_dataframe(self, df, name, dir='./', index_save_status=False):
+    def save_dataframe(self, df:pd.DataFrame, name:str, dir:str='./', index_save_status=False):
         save_path = os.path.join(dir,f'{name}.csv')
         df.to_csv(save_path, index=index_save_status)
         print(f'{name} saved')
 
-    def extract_activity_data(self, fn):
+    def extract_activity_data(self, filename:str):
         ## Load gc api module to access individual activities 
         cp = CheetahPy()
         ac = cp.get_activity(athlete="Ryan Duecker"
-                            ,activity_filename=fn)
+                            ,activity_filename=filename)
         var_Ti = np.where(ac['temp'].mean() < -20, 20, ac['temp'].mean())
         var_HRi = ac['hr'].to_numpy()
         var_PWRi = ac['watts'].to_numpy()
@@ -221,23 +221,27 @@ class load_functions(dataset_preprocess):
         frame[load_metric] = performance_function(frame)
         return frame
 
-    def daily_tss(self, frame):
+    def daily_tss(self, frame: pd.DataFrame) -> pd.Series:
         values = frame['TSS'].groupby(frame['date']).transform('sum').fillna(0)
         return values
 
-    def tiz2of5(self, frame):
+    def daily_rpe(self, frame: pd.DataFrame) -> pd.Series:
+        values = frame[['RPE','Duration']].product(axis=1).groupby(frame['date']).transform('sum').fillna(0)
+        return values
+
+    def tiz2of5(self, frame: pd.DataFrame) -> pd.Series:
         values = frame['L2_Time_in_Zone'].groupby(frame['date']).transform('sum').fillna(0).sum(axis=1)
         return values
     
-    def tiz1of3(self, frame):
+    def tiz1of3(self, frame: pd.DataFrame) -> pd.Series:
         values = frame[['L1_Time_in_Zone','L2_Time_in_Zone']].groupby(frame['date']).transform('sum').fillna(0).sum(axis=1)
         return values
     
-    def tiz2of3(self, frame):
+    def tiz2of3(self, frame: pd.DataFrame) -> pd.Series:
         values = frame[['L3_Time_in_Zone']].groupby(frame['date']).transform('sum').fillna(0)
         return values
     
-    def tiz3of3(self, frame):
+    def tiz3of3(self, frame: pd.DataFrame) -> pd.Series:
         values = frame[['L4_Time_in_Zone','L5_Time_in_Zone'
                         ,'L6_Time_in_Zone','L7_Time_in_Zone']].groupby(frame['date']).transform('sum').fillna(0).sum(axis=1)
         return values
