@@ -131,3 +131,6 @@ dmypy.json
 
 # data stores
 gc_opendata-samples/
+
+# MAC
+.DS_Store
