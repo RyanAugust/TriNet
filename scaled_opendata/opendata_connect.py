@@ -27,16 +27,12 @@ class open_dataset(object):
                     if type(df[col].dropna().values[0]) == str:
                         df[col] = self._safe_convert(original_series=df[col], type_convert=float)
                     elif type(df[col].dropna().values[0]) == list:
-                        # try:
-                        print('[pre ] df shape: {}, {}'.format(df.shape[0],df.shape[1]))
-                        decompression = self._safe_list_decompression(original_series=df[col], type_convert=float)
-                        print('[pre ] decomp shape: {}, {}'.format(decompression.shape[0],decompression.shape[1]))
-                        # df = pd.concat([df, decompression ], axis=1)
-                        df = df.join(decompression)
-                        print('[post] df shape: {}, {}'.format(df.shape[0],df.shape[1]))
-                        # del df[col]
-                        # except:
-                        #     print(f'{col}--fail')
+                        try:
+                            decompression = self._safe_list_decompression(original_series=df[col], type_convert=float)
+                            df = df.join(decompression)
+                            del df[col]
+                        except:
+                            print(f'{col}--fail')
                     else:
                         None
         return df
@@ -75,7 +71,6 @@ class open_dataset(object):
                 return float(val)
             else:
                 return 0, 0
-        # decompressed_df = pd.DataFrame(zip(*original_series.apply(safe_split)),columns=[f'{metric_base_name}_value',f'{metric_base_name}_duration'])
         slim_original_series = original_series.dropna()
         decompressed_df = pd.DataFrame(original_series.dropna().tolist(), index=slim_original_series.index)
         if decompressed_df.shape[1] == 2:
