@@ -7,12 +7,19 @@ class open_dataset(object):
     def __init__(self, root_dir):
         self.root_dir = root_dir
         self.athlete_ids = self.get_athlete_ids()
+
     def get_athlete_ids(self):
         for a,b,c in os.walk(self.root_dir):
             athletes = b
             athletes.remove('INDEX') if 'INDEX' in athletes else 0
             break
         return athletes
+
+    def show_athlete_ids(self):
+        athlete_id_count = len(self.athlete_ids)
+        athlete_ids_joined = ",\n".join(self.athlete_ids)
+        ath_id_str = f"AVAILABLE ATHLETE IDS ({athlete_id_count}): \n {athlete_ids_joined}"
+        print(ath_id_str)
 
     def get_athlete_summary(self, athlete_id, make_float = True):
         ath_summary_path = self._athlete_summary_path(athlete_id=athlete_id)
